@@ -1,0 +1,66 @@
+name: Build iOS app
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      # The project file is generated here, so the repository only needs
+      # MusicApp.swift and this workflow to get a reproducible simulator build.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cat > project.yml <<'YAML'
+          name: Sonic
+          options:
+            bundleIdPrefix: com.example
+            deploymentTarget:
+              iOS: "26.0"
+          targets:
+            Sonic:
+              type: application
+              platform: iOS
+              sources:
+                - path: MusicApp.swift
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.example.sonic
+                  PRODUCT_NAME: Sonic
+                  SWIFT_VERSION: "5.0"
+                  TARGETED_DEVICE_FAMILY: "1,2"
+                  GENERATE_INFOPLIST_FILE: YES
+                  INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+                  INFOPLIST_KEY_UILaunchScreen_Generation: YES
+          YAML
+          xcodegen generate
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project Sonic.xcodeproj \
+            -scheme Sonic \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonic-iOS-Simulator
+          path: build/DerivedData/Build/Products/Debug-iphonesimulator/Sonic.app
